@@ -10,7 +10,7 @@ let
   isDarwin = pkgs.stdenv.isDarwin;
 
   # Platform-specific default advertiser
-  defaultAdvertiser = if isLinux then "avahi" else "ciao";
+  defaultAdvertiser = if isLinux then "avahi" else "bonjour";
 
   # Generate the config.json file from Nix options
   configFile = pkgs.writeText "config.json" (builtins.toJSON cfg.config);
