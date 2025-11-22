@@ -34,53 +34,54 @@
       # NixOS module
       nixosModules.default = import ./module.nix;
 
-      # Example NixOS configuration
-      # Uses the host system architecture when building
-      nixosConfigurations.example = nixpkgs.lib.nixosSystem {
-        modules = [
-          self.nixosModules.default
-          ({ pkgs, ... }: {
-            # Import the overlay to make packages available
-            nixpkgs.overlays = [ self.overlays.default ];
+      # Example NixOS configurations for Linux systems
+      nixosConfigurations = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (system:
+        nixpkgs.lib.nixosSystem {
+          inherit system;
+          modules = [
+            self.nixosModules.default
+            ({ pkgs, ... }: {
+              nixpkgs.overlays = [ self.overlays.default ];
 
-            services.homebridgeNix = {
-              enable = true;
+              services.homebridgeNix = {
+                enable = true;
 
-              config = {
-                bridge = {
-                  name = "Example Homebridge";
-                  username = "AA:BB:CC:DD:EE:FF";
-                  port = 51826;
-                  pin = "123-45-678";
+                config = {
+                  bridge = {
+                    name = "Example Homebridge";
+                    username = "AA:BB:CC:DD:EE:FF";
+                    port = 51826;
+                    pin = "123-45-678";
+                  };
+
+                  platforms = [
+                    {
+                      platform = "Camera-ffmpeg";
+                      name = "Camera FFmpeg";
+                      cameras = [
+                        {
+                          name = "Example Camera";
+                          videoConfig = {
+                            source = "-i rtsp://camera.example.com/stream";
+                            maxWidth = 1280;
+                            maxHeight = 720;
+                            maxFPS = 30;
+                          };
+                        }
+                      ];
+                    }
+                  ];
                 };
 
-                platforms = [
-                  {
-                    platform = "Camera-ffmpeg";
-                    name = "Camera FFmpeg";
-                    cameras = [
-                      {
-                        name = "Example Camera";
-                        videoConfig = {
-                          source = "-i rtsp://camera.example.com/stream";
-                          maxWidth = 1280;
-                          maxHeight = 720;
-                          maxFPS = 30;
-                        };
-                      }
-                    ];
-                  }
+                plugins = with pkgs; [
+                  homebridge-camera-ffmpeg
                 ];
+
+                openFirewall = true;
               };
-
-              plugins = with pkgs; [
-                homebridge-camera-ffmpeg
-              ];
-
-              openFirewall = true;
-            };
-          })
-        ];
-      };
+            })
+          ];
+        }
+      );
     };
 }
