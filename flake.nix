@@ -44,7 +44,7 @@
             # Import the overlay to make packages available
             nixpkgs.overlays = [ self.overlays.default ];
 
-            services.homebridge = {
+            services.homebridgeNix = {
               enable = true;
 
               config = {

@@ -56,10 +56,12 @@ nix flake update
 ### module.nix (Service Module)
 Platform detection happens at evaluation time (`pkgs.stdenv.isLinux`/`isDarwin`). The module:
 1. Creates `homebridge` system user and group
-2. Generates `config.json` from `services.homebridge.config` using `builtins.toJSON`
+2. Generates `config.json` from `services.homebridgeNix.config` using `builtins.toJSON`
 3. Sets up `NODE_PATH` to include plugin node_modules
 4. On Linux: Enables Avahi service and configures for mDNS publishing
-5. On macOS: No system services needed (Ciao is embedded)
+5. On macOS: No system services needed (Bonjour is embedded)
+
+Note: Uses `services.homebridgeNix` (not `services.homebridge`) to avoid conflict with the upstream nixpkgs module which uses a web UI-based approach.
 
 ## Common Development Patterns
 
@@ -80,7 +82,7 @@ When updating `version` in package.nix or camera-ffmpeg.nix:
 
 ### Module Configuration
 
-The `services.homebridge.config` option is passed directly to `builtins.toJSON`, so it must be valid Nix attrs that serialize to valid Homebridge config.json structure. See README.md lines 232-283 for full examples.
+The `services.homebridgeNix.config` option is passed directly to `builtins.toJSON`, so it must be valid Nix attrs that serialize to valid Homebridge config.json structure. See README.md for full examples.
 
 ## Important Constraints
 

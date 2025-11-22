@@ -27,7 +27,7 @@ Nix flake for Homebridge with declarative configuration for NixOS and nix-darwin
       modules = [
         homebridge.nixosModules.default
         {
-          services.homebridge = {
+          services.homebridgeNix = {
             enable = true;
 
             config = {
@@ -88,7 +88,7 @@ Nix flake for Homebridge with declarative configuration for NixOS and nix-darwin
           # Import the overlay to make packages available
           nixpkgs.overlays = [ homebridge.overlays.default ];
 
-          services.homebridge = {
+          services.homebridgeNix = {
             enable = true;
 
             config = {

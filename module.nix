@@ -3,7 +3,7 @@
 with lib;
 
 let
-  cfg = config.services.homebridge;
+  cfg = config.services.homebridgeNix;
 
   # Detect if we're on Linux or macOS
   isLinux = pkgs.stdenv.isLinux;
@@ -27,7 +27,7 @@ let
 
 in
 {
-  options.services.homebridge = {
+  options.services.homebridgeNix = {
     enable = mkEnableOption "Homebridge HomeKit support server";
 
     package = mkOption {
@@ -117,7 +117,7 @@ in
 
   config = mkIf cfg.enable {
     # Set platform-appropriate default advertiser
-    services.homebridge.config.bridge.advertiser = mkDefault defaultAdvertiser;
+    services.homebridgeNix.config.bridge.advertiser = mkDefault defaultAdvertiser;
 
     # Create the homebridge user and group
     users.users.${cfg.user} = {
@@ -152,7 +152,7 @@ in
     };
 
     # Create the systemd service
-    systemd.services.homebridge = {
+    systemd.services.homebridgeNix = {
       description = "Homebridge - HomeKit support for the impatient";
       after = [ "network-online.target" ] ++ optional isLinux "avahi-daemon.service";
       wants = [ "network-online.target" ];
