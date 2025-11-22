@@ -40,10 +40,10 @@
         modules = [
           self.nixosModules.default
           ({ pkgs, ... }: {
-              # Import the overlay to make packages available
-              nixpkgs.overlays = [ self.overlays.default ];
+            # Import the overlay to make packages available
+            nixpkgs.overlays = [ self.overlays.default ];
 
-              services.homebridgeNix = {
+            services.homebridgeNix = {
               enable = true;
 
               config = {
@@ -82,4 +82,5 @@
           })
         ];
       };
+    };
 }
