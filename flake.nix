@@ -35,16 +35,15 @@
       nixosModules.default = import ./module.nix;
 
       # Example NixOS configuration
-      # This shows how to use the module in a real system
+      # Uses the host system architecture when building
       nixosConfigurations.example = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
         modules = [
           self.nixosModules.default
           ({ pkgs, ... }: {
-            # Import the overlay to make packages available
-            nixpkgs.overlays = [ self.overlays.default ];
+              # Import the overlay to make packages available
+              nixpkgs.overlays = [ self.overlays.default ];
 
-            services.homebridgeNix = {
+              services.homebridgeNix = {
               enable = true;
 
               config = {
@@ -83,5 +82,4 @@
           })
         ];
       };
-    };
 }
