@@ -4,21 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Nix flake that packages Homebridge and plugins for NixOS and nix-darwin systems. The flake provides deterministic builds of Node.js packages and a cross-platform service module with platform-specific mDNS configuration.
+This is a Nix flake that packages Homebridge and plugins for home-manager. The flake provides deterministic builds of Node.js packages and a home-manager module for declarative configuration.
 
 ## Key Architecture Decisions
 
+### home-manager Module
+Uses systemd user services (not system services), runs as the user without requiring root privileges. Data stored in `~/.local/share/homebridge/`.
+
 ### No Web UI
-This implementation runs Homebridge directly without homebridge-config-ui-x. All configuration is purely declarative via the NixOS module, generating `config.json` at service activation.
-
-### Platform-Specific mDNS Strategy
-- **Linux (NixOS)**: Uses Avahi daemon for mDNS via D-Bus (no capabilities needed)
-- **macOS (nix-darwin)**: Uses Ciao, a pure Node.js mDNS implementation (no system dependencies)
-
-The module automatically detects the platform and sets the appropriate default advertiser in `module.nix:12-13`.
+This implementation runs Homebridge directly without homebridge-config-ui-x. All configuration is purely declarative via the home-manager module, generating `config.json` at service activation.
 
 ### Plugin Architecture
-Plugins are built as separate Nix packages and combined with Homebridge using `buildEnv` in `module.nix:19-26`. This creates a unified package with all plugins available via NODE_PATH.
+Plugins are built as separate Nix packages and combined with Homebridge using `buildEnv` in `module.nix:12-19`. This creates a unified package with all plugins available via NODE_PATH.
 
 ## Build Commands
 
@@ -53,15 +50,15 @@ nix flake update
 - Uses `makeWrapper` to ensure system `ffmpeg` is in PATH
 - Template for adding additional Homebridge plugins
 
-### module.nix (Service Module)
-Platform detection happens at evaluation time (`pkgs.stdenv.isLinux`/`isDarwin`). The module:
-1. Creates `homebridge` system user and group
-2. Generates `config.json` from `services.homebridgeNix.config` using `builtins.toJSON`
-3. Sets up `NODE_PATH` to include plugin node_modules
-4. On Linux: Enables Avahi service and configures for mDNS publishing
-5. On macOS: No system services needed (Bonjour is embedded)
+### module.nix (home-manager Module)
+The module:
+1. Generates `config.json` from `services.homebridgeNix.config` using `builtins.toJSON`
+2. Sets up `NODE_PATH` to include plugin node_modules
+3. Creates systemd user service (`systemd.user.services.homebridgeNix`)
+4. Uses `~/.local/share/homebridge` as data directory
+5. Runs as the user (no root/system services)
 
-Note: Uses `services.homebridgeNix` (not `services.homebridge`) to avoid conflict with the upstream nixpkgs module which uses a web UI-based approach.
+Note: Uses `services.homebridgeNix` (not `services.homebridge`) to avoid conflict with upstream nixpkgs module.
 
 ## Common Development Patterns
 
@@ -86,20 +83,18 @@ The `services.homebridgeNix.config` option is passed directly to `builtins.toJSO
 
 ## Important Constraints
 
-### Security Model
-No Linux capabilities are used. Ports must be >1024 (default 51826). mDNS is handled by system daemons (Avahi) or userspace libraries (Ciao), not raw sockets.
+### User Service
+Runs as systemd user service (no root). Data in user's home directory. Ports must be >1024 (default 51826 is fine).
 
 ### Node.js Version
 Currently pinned to `nodejs_22`. Homebridge supports Node 18.15.0+ through 24.x, but plugins may have narrower ranges.
 
-### Cross-Platform Compatibility
-All code in module.nix must work on both Linux and Darwin. Use `mkIf isLinux` or `mkIf isDarwin` for platform-specific configuration (see lines 134-152).
-
 ## Supported Systems
 
-- `x86_64-linux` - NixOS on Intel/AMD
-- `aarch64-linux` - NixOS on ARM (Raspberry Pi, etc.)
-- `x86_64-darwin` - macOS on Intel
-- `aarch64-darwin` - macOS on Apple Silicon
+**home-manager module (Linux only):**
+- `x86_64-linux`, `aarch64-linux`
+- Uses systemd user services (not available on macOS)
 
-Define in `flake.nix:10` and used throughout via `forAllSystems`.
+**Packages (all systems):**
+- `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, `aarch64-darwin`
+- Defined in `flake.nix:10` and used throughout via `forAllSystems`

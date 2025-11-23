@@ -1,38 +1,41 @@
 # homebridge-nix
 
-Nix flake for Homebridge with declarative configuration for NixOS and nix-darwin.
+Nix flake for Homebridge with declarative home-manager configuration.
 
 ## Features
 
 - Homebridge packages built with Nix
-- Declarative `config.json` via NixOS module
-- Cross-platform: Linux (NixOS) and macOS (nix-darwin)
-- Platform-specific mDNS (Avahi on Linux, native Bonjour on macOS)
+- Declarative configuration via home-manager
+- Runs as user service (no root needed)
+- Linux only (uses systemd user services)
 - Included plugin: homebridge-camera-ffmpeg
 
-## Usage
+## Installation
 
-### NixOS (Linux)
+Add to your home-manager flake:
 
 ```nix
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    home-manager.url = "github:nix-community/home-manager";
     homebridge.url = "github:qmx/homebridge-nix";
   };
 
-  outputs = { self, nixpkgs, homebridge }: {
-    nixosConfigurations.my-server = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
+  outputs = { nixpkgs, home-manager, homebridge, ... }: {
+    homeConfigurations."user@host" = home-manager.lib.homeManagerConfiguration {
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
       modules = [
-        homebridge.nixosModules.default
+        homebridge.homeManagerModules.default
         {
+          nixpkgs.overlays = [ homebridge.overlays.default ];
+
           services.homebridgeNix = {
             enable = true;
 
             config = {
               bridge = {
-                name = "Home Bridge";
+                name = "My Homebridge";
                 username = "AA:BB:CC:DD:EE:FF";
                 port = 51826;
                 pin = "123-45-678";
@@ -41,26 +44,17 @@ Nix flake for Homebridge with declarative configuration for NixOS and nix-darwin
               platforms = [
                 {
                   platform = "Camera-ffmpeg";
-                  name = "Camera FFmpeg";
                   cameras = [
                     {
                       name = "Front Door";
-                      videoConfig = {
-                        source = "-i rtsp://camera.local/stream";
-                        maxWidth = 1280;
-                        maxHeight = 720;
-                      };
+                      videoConfig.source = "-i rtsp://camera.local/stream";
                     }
                   ];
                 }
               ];
             };
 
-            plugins = with pkgs; [
-              homebridge-camera-ffmpeg
-            ];
-
-            openFirewall = true;
+            plugins = with pkgs; [ homebridge-camera-ffmpeg ];
           };
         }
       ];
@@ -69,67 +63,16 @@ Nix flake for Homebridge with declarative configuration for NixOS and nix-darwin
 }
 ```
 
-### macOS (nix-darwin)
+## Usage
 
-```nix
-{
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    darwin.url = "github:LnL7/nix-darwin";
-    homebridge.url = "github:qmx/homebridge-nix";
-  };
+After installation, enable and start the service:
 
-  outputs = { self, nixpkgs, darwin, homebridge }: {
-    darwinConfigurations.my-mac = darwin.lib.darwinSystem {
-      system = "aarch64-darwin";  # or "x86_64-darwin" for Intel
-      modules = [
-        homebridge.nixosModules.default  # Works with nix-darwin too!
-        {
-          # Import the overlay to make packages available
-          nixpkgs.overlays = [ homebridge.overlays.default ];
-
-          services.homebridgeNix = {
-            enable = true;
-
-            config = {
-              bridge = {
-                name = "Mac Homebridge";
-                username = "BB:CC:DD:EE:FF:00";
-                port = 51826;
-                pin = "987-65-432";
-              };
-
-              platforms = [
-                {
-                  platform = "Camera-ffmpeg";
-                  name = "Camera FFmpeg";
-                  cameras = [
-                    {
-                      name = "Backyard Camera";
-                      videoConfig = {
-                        source = "-i rtsp://camera.local/stream";
-                        maxWidth = 1920;
-                        maxHeight = 1080;
-                      };
-                    }
-                  ];
-                }
-              ];
-            };
-
-            plugins = with pkgs; [
-              homebridge-camera-ffmpeg
-            ];
-
-            # Note: openFirewall doesn't apply on macOS
-            # You may need to configure macOS firewall separately
-          };
-        }
-      ];
-    };
-  };
-}
+```bash
+systemctl --user enable --now homebridgeNix
+systemctl --user status homebridgeNix
 ```
+
+Configuration is stored in `~/.local/share/homebridge/`.
 
 
 ## Available Plugins
@@ -146,5 +89,8 @@ nix flake check
 
 ## Supported Systems
 
+**home-manager module (Linux only):**
 - `x86_64-linux`, `aarch64-linux`
-- `x86_64-darwin`, `aarch64-darwin`
+
+**Packages (build on any system):**
+- `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, `aarch64-darwin`

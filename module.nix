@@ -5,13 +5,6 @@ with lib;
 let
   cfg = config.services.homebridgeNix;
 
-  # Detect if we're on Linux or macOS
-  isLinux = pkgs.stdenv.isLinux;
-  isDarwin = pkgs.stdenv.isDarwin;
-
-  # Platform-specific default advertiser
-  defaultAdvertiser = if isLinux then "avahi" else "bonjour";
-
   # Generate the config.json file from Nix options
   configFile = pkgs.writeText "config.json" (builtins.toJSON cfg.config);
 
@@ -37,21 +30,9 @@ in
       description = "The homebridge package to use.";
     };
 
-    user = mkOption {
-      type = types.str;
-      default = "homebridge";
-      description = "User account under which homebridge runs.";
-    };
-
-    group = mkOption {
-      type = types.str;
-      default = "homebridge";
-      description = "Group under which homebridge runs.";
-    };
-
     dataDir = mkOption {
       type = types.path;
-      default = "/var/lib/homebridge";
+      default = "${config.home.homeDirectory}/.local/share/homebridge";
       description = "The directory where homebridge stores its data.";
     };
 
@@ -63,7 +44,7 @@ in
           username = "CC:22:3D:E3:CE:30";
           port = 51826;
           pin = "031-45-154";
-          advertiser = "avahi";
+          advertiser = "bonjour";
         };
         accessories = [];
         platforms = [];
@@ -75,12 +56,10 @@ in
             username = "AA:BB:CC:DD:EE:FF";
             port = 51826;
             pin = "123-45-678";
-            advertiser = "avahi";
           };
           platforms = [
             {
               platform = "Camera-ffmpeg";
-              name = "Camera FFmpeg";
               cameras = [ ];
             }
           ];
@@ -89,9 +68,6 @@ in
       description = ''
         Configuration for homebridge. This will be converted to JSON and
         written to config.json in the data directory.
-
-        See https://github.com/homebridge/homebridge/wiki/Configuration
-        for available options.
       '';
     };
 
@@ -101,115 +77,42 @@ in
       example = literalExpression "[ pkgs.homebridge-camera-ffmpeg ]";
       description = ''
         List of homebridge plugin packages to install.
-        These will be made available to homebridge via NODE_PATH.
-      '';
-    };
-
-    openFirewall = mkOption {
-      type = types.bool;
-      default = false;
-      description = ''
-        Whether to automatically open the firewall for homebridge.
-        This will open the bridge port and the child bridge port range.
       '';
     };
   };
 
   config = mkIf cfg.enable {
-    # Set platform-appropriate default advertiser
-    services.homebridgeNix.config.bridge.advertiser = mkDefault defaultAdvertiser;
+    # Make packages available
+    home.packages = [ cfg.package ];
 
-    # Create the homebridge user and group
-    users.users.${cfg.user} = {
-      isSystemUser = true;
-      group = cfg.group;
-      home = cfg.dataDir;
-      createHome = true;
-      description = "Homebridge daemon user";
-    };
-
-    users.groups.${cfg.group} = {};
-
-    # Enable and configure Avahi for mDNS (Linux only)
-    services.avahi = mkIf isLinux {
-      enable = true;
-      nssmdns4 = true;
-      publish = {
-        enable = true;
-        addresses = true;
-        domain = true;
-        workstation = true;
+    # Create the systemd user service
+    systemd.user.services.homebridgeNix = {
+      Unit = {
+        Description = "Homebridge - HomeKit support for the impatient";
+        After = [ "network-online.target" ];
       };
-    };
 
-    # Open firewall ports if requested (Linux only, macOS uses different firewall)
-    networking.firewall = mkIf (cfg.openFirewall && isLinux) {
-      allowedTCPPorts = [
-        cfg.config.bridge.port
-      ] ++ (optionals (cfg.config ? ports) [
-        # Open child bridge port range if configured
-      ]);
-    };
-
-    # Create the systemd service
-    systemd.services.homebridgeNix = {
-      description = "Homebridge - HomeKit support for the impatient";
-      after = [ "network-online.target" ] ++ optional isLinux "avahi-daemon.service";
-      wants = [ "network-online.target" ];
-      requires = optional isLinux "avahi-daemon.service";
-      wantedBy = [ "multi-user.target" ];
-
-      # Set up the data directory and config file before starting
-      preStart = ''
-        # Ensure data directory exists and has correct permissions
-        mkdir -p ${cfg.dataDir}
-        chown ${cfg.user}:${cfg.group} ${cfg.dataDir}
-        chmod 750 ${cfg.dataDir}
-
-        # Copy config.json to data directory
-        cp ${configFile} ${cfg.dataDir}/config.json
-        chown ${cfg.user}:${cfg.group} ${cfg.dataDir}/config.json
-        chmod 640 ${cfg.dataDir}/config.json
-
-        # Create subdirectories for homebridge data
-        mkdir -p ${cfg.dataDir}/persist
-        mkdir -p ${cfg.dataDir}/accessories
-        chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}/persist ${cfg.dataDir}/accessories
-      '';
-
-      serviceConfig = {
+      Service = {
         Type = "simple";
-        User = cfg.user;
-        Group = cfg.group;
         WorkingDirectory = cfg.dataDir;
-
-        # Set up environment for homebridge
         Environment = [
-          "HOME=${cfg.dataDir}"
+          "HOME=${config.home.homeDirectory}"
           "NODE_PATH=${homebridgeWithPlugins}/lib/node_modules"
         ];
-
-        # Command to run homebridge
+        ExecStartPre = pkgs.writeShellScript "homebridge-pre-start" ''
+          mkdir -p ${cfg.dataDir}/{persist,accessories}
+          cp ${configFile} ${cfg.dataDir}/config.json
+          chmod 750 ${cfg.dataDir}
+          chmod 640 ${cfg.dataDir}/config.json
+        '';
         ExecStart = "${homebridgeWithPlugins}/bin/homebridge -U ${cfg.dataDir}";
-
-        # Restart policy
         Restart = "always";
         RestartSec = 3;
-        KillMode = "process";
+      };
 
-        # Security hardening
-        PrivateTmp = true;
-        ProtectSystem = "strict";
-        ProtectHome = true;
-        ReadWritePaths = [ cfg.dataDir ];
-        NoNewPrivileges = true;
-
-        # Resource limits
-        LimitNOFILE = 4096;
+      Install = {
+        WantedBy = [ "default.target" ];
       };
     };
-
-    # Add a helper command to manage homebridge
-    environment.systemPackages = [ cfg.package ];
   };
 }
